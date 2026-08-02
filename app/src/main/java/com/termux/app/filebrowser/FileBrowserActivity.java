@@ -34,15 +34,39 @@ import java.util.List;
  * Tap a directory to enter it, tap a ".sh" file to run it in a new Termux
  * session, tap any other file to open it with a system app.
  */
+/**
+ * TermuxMod: simple file browser for the sdcard and the Termux home directory.
+ *
+ * Default mode: tap a directory to enter it, tap a ".sh" file to run it in a
+ * new Termux session, tap any other file to open it with a system app.
+ *
+ * Picker modes (used by other screens, e.g. the APK Builder):
+ * - {@link #EXTRA_PICK_MODE} = {@link #PICK_MODE_FOLDER}: shows a "Pilih folder
+ *   ini" button; tapping it returns the current directory via setResult().
+ * - {@link #EXTRA_PICK_MODE} = {@link #PICK_MODE_FILE}: tapping any file
+ *   returns its path via setResult() instead of running/opening it.
+ */
 public class FileBrowserActivity extends AppCompatActivity implements FileBrowserAdapter.OnEntryClickListener {
 
     private static final String SDCARD_ROOT_TAG = "sdcard";
     private static final String HOME_ROOT_TAG = "home";
 
+    public static final String EXTRA_PICK_MODE = "com.termux.app.filebrowser.EXTRA_PICK_MODE";
+    public static final String PICK_MODE_FOLDER = "folder";
+    public static final String PICK_MODE_FILE = "file";
+    /** Result extra holding the picked absolute path, set on {@link #RESULT_OK}. */
+    public static final String RESULT_EXTRA_PATH = "com.termux.app.filebrowser.RESULT_EXTRA_PATH";
+
+    /** Optional extra: absolute path to start browsing from, instead of the sdcard root. */
+    public static final String EXTRA_START_PATH = "com.termux.app.filebrowser.EXTRA_START_PATH";
+
+    private String mPickMode; // null = normal browse mode
+
     private TextView mPathText;
     private TextView mEmptyText;
     private RecyclerView mListView;
     private FileBrowserAdapter mAdapter;
+    private MaterialButton mPickFolderButton;
 
     private File mRootDir;
     private File mCurrentDir;
@@ -53,8 +77,15 @@ public class FileBrowserActivity extends AppCompatActivity implements FileBrowse
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_file_browser);
 
+        mPickMode = getIntent().getStringExtra(EXTRA_PICK_MODE);
+
         Toolbar toolbar = findViewById(R.id.file_browser_toolbar);
         setSupportActionBar(toolbar);
+        if (PICK_MODE_FOLDER.equals(mPickMode)) {
+            toolbar.setTitle(R.string.file_browser_pick_folder_title);
+        } else if (PICK_MODE_FILE.equals(mPickMode)) {
+            toolbar.setTitle(R.string.file_browser_pick_file_title);
+        }
 
         mPathText = findViewById(R.id.file_browser_path);
         mEmptyText = findViewById(R.id.file_browser_empty_text);
@@ -72,8 +103,30 @@ public class FileBrowserActivity extends AppCompatActivity implements FileBrowse
         MaterialButton homeButton = findViewById(R.id.file_browser_switch_home);
         homeButton.setOnClickListener(v -> switchRoot(HOME_ROOT_TAG));
 
-        switchRoot(SDCARD_ROOT_TAG);
+        mPickFolderButton = findViewById(R.id.file_browser_pick_folder_button);
+        if (PICK_MODE_FOLDER.equals(mPickMode)) {
+            mPickFolderButton.setVisibility(View.VISIBLE);
+            mPickFolderButton.setOnClickListener(v -> returnPickedPath(mCurrentDir.getAbsolutePath()));
+        }
+
+        String startPath = getIntent().getStringExtra(EXTRA_START_PATH);
+        if (startPath != null && new File(startPath).isDirectory()) {
+            mRootDir = SDCARD_ROOT_TAG.equals(mCurrentRootTag) ? Environment.getExternalStorageDirectory()
+                : new File(TermuxConstants.TERMUX_HOME_DIR_PATH);
+            mCurrentDir = new File(startPath);
+            listCurrentDir();
+        } else {
+            switchRoot(SDCARD_ROOT_TAG);
+        }
     }
+
+    private void returnPickedPath(String path) {
+        Intent result = new Intent();
+        result.putExtra(RESULT_EXTRA_PATH, path);
+        setResult(RESULT_OK, result);
+        finish();
+    }
+
 
     /** Switches between the sdcard root and the Termux app home directory. */
     private void switchRoot(String rootTag) {
@@ -179,6 +232,8 @@ public class FileBrowserActivity extends AppCompatActivity implements FileBrowse
         if (entry.isDirectory) {
             mCurrentDir = entry.file;
             listCurrentDir();
+        } else if (PICK_MODE_FILE.equals(mPickMode)) {
+            returnPickedPath(entry.file.getAbsolutePath());
         } else if (entry.isScript) {
             confirmAndRunScript(entry.file);
         } else {

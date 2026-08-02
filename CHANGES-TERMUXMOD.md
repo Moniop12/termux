@@ -16,6 +16,19 @@ Base: source resmi termux-app (upstream, tidak dimodifikasi packagenya/nama app-
 ## 3. File Browser + Script Runner
 (sama seperti sebelumnya — lihat riwayat chat)
 
+## 4. APK Builder (baru, V1)
+- Package baru: `app/src/main/java/com/termux/app/apkbuilder/ApkBuilderActivity.java`
+- Front-end native buat script builder APK milik kamu sendiri (bukan bagian dari Termux upstream — kamu tetap harus punya script-nya sendiri, app cuma bantu manggil).
+- Alurnya:
+  1. Pilih file `.sh` script builder kamu (pakai `FileBrowserActivity` mode baru "pick file")
+  2. Pilih folder proyek Android (pakai `FileBrowserActivity` mode baru "pick folder") — path-nya otomatis ditulis ke `~/.termux-apk-builder/last_project.txt`, sama persis file yang dipakai fitur "proyek terakhir" di script kamu
+  3. Tap "Build Debug"/"Build Release" → buka terminal, jalanin script kamu apa adanya (gak dimodif)
+  4. **Yang PERLU kamu lakuin manual di V1**: pas terminal kebuka, tekan "1" (Debug) atau "2" (Release) lalu Enter. Ini gak bisa diauto-tekan di V1 karena `EXTRA_STDIN` di Termux cuma jalan buat mode eksekusi headless (`APP_SHELL`), bukan sesi terminal interaktif — dicoba dan dikonfirmasi gak jalan, makanya gak dipaksain.
+- `FileBrowserActivity` ditambah 2 mode baru (gak ganggu perilaku browse biasa): `PICK_MODE_FOLDER` (nampilin tombol "Pilih Folder Ini") dan `PICK_MODE_FILE` (tap file balikin path-nya, gak langsung run/buka).
+- Preference baru `KEY_APK_BUILDER_SCRIPT_PATH` (di `TermuxPreferenceConstants`/`TermuxAppSharedPreferences`) — nyimpen path script biar gak perlu pilih ulang tiap buka.
+- Entry point: tombol wrench di drawer (sebelah Files).
+- **V2 (belum dikerjain)**: full headless — terminal gak kebuka sama sekali, log native di layar sendiri. Butuh switch ke `Runner.APP_SHELL` + custom log-streaming UI.
+
 ## Yang PERLU kamu cek/lakukan sebelum build
 1. ~~Download bootstrap-aarch64.zip manual~~ — TIDAK PERLU, sudah auto lewat Gradle task `downloadBootstraps`.
 2. Sync Gradle / build via GitHub Actions.

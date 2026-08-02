@@ -129,6 +129,15 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
         SharedPreferenceUtils.setBoolean(mSharedPreferences, TERMUX_APP.KEY_HAS_AUTO_REQUESTED_STORAGE, value, false);
     }
 
+    /** TermuxMod: absolute path to the user's chosen APK-builder shell script. */
+    public String getApkBuilderScriptPath() {
+        return SharedPreferenceUtils.getString(mSharedPreferences, TERMUX_APP.KEY_APK_BUILDER_SCRIPT_PATH, TERMUX_APP.DEFAULT_VALUE_KEY_APK_BUILDER_SCRIPT_PATH, true);
+    }
+
+    public void setApkBuilderScriptPath(String value) {
+        SharedPreferenceUtils.setString(mSharedPreferences, TERMUX_APP.KEY_APK_BUILDER_SCRIPT_PATH, value, false);
+    }
+
 
 
     public static int[] getDefaultFontSizes(Context context) {

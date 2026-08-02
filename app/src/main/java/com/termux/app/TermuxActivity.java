@@ -249,6 +249,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         setFilesButtonView();
 
+        setApkBuilderButtonView();
+
         setNewSessionButtonView();
 
         setToggleKeyboardView();
@@ -589,6 +591,17 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             if (drawer != null) drawer.closeDrawers();
             ActivityUtils.startActivity(this,
                 new Intent(this, com.termux.app.filebrowser.FileBrowserActivity.class));
+        });
+    }
+
+    /** TermuxMod: opens the APK Builder screen (pick script + project folder). */
+    private void setApkBuilderButtonView() {
+        ImageButton apkBuilderButton = findViewById(R.id.apk_builder_button);
+        apkBuilderButton.setOnClickListener(v -> {
+            DrawerLayout drawer = getDrawer();
+            if (drawer != null) drawer.closeDrawers();
+            ActivityUtils.startActivity(this,
+                new Intent(this, com.termux.app.apkbuilder.ApkBuilderActivity.class));
         });
     }
 

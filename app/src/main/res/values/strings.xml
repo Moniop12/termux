@@ -104,6 +104,25 @@
     <string name="file_browser_switch_to_home">Termux Home</string>
     <string name="file_browser_storage_not_granted">Izin akses storage belum diberikan. Buka Settings untuk memberi izin.</string>
     <string name="file_browser_open_settings">Open Settings</string>
+    <string name="file_browser_pick_folder_title">Pilih Folder</string>
+    <string name="file_browser_pick_file_title">Pilih File</string>
+    <string name="file_browser_pick_folder_button">Pilih Folder Ini</string>
+
+    <!-- TermuxMod: APK Builder -->
+    <string name="action_open_apk_builder">APK Builder</string>
+    <string name="apk_builder_title">APK Builder</string>
+    <string name="apk_builder_not_selected">Belum dipilih</string>
+    <string name="apk_builder_script_label">Script Builder (.sh)</string>
+    <string name="apk_builder_pick_script_button">Pilih Script</string>
+    <string name="apk_builder_project_label">Folder Proyek</string>
+    <string name="apk_builder_pick_project_button">Pilih Folder Proyek</string>
+    <string name="apk_builder_build_debug_button">🚀 Build Debug</string>
+    <string name="apk_builder_build_release_button">🔒 Build Release</string>
+    <string name="apk_builder_hint">Terminal akan terbuka menjalankan script kamu. Tinggal tekan \"1\" (Debug) atau \"2\" (Release) lalu Enter — folder proyek sudah otomatis tersimpan sebagai \"proyek terakhir\", jadi tinggal Enter buat pakai itu.</string>
+    <string name="apk_builder_state_dir_failed">Gagal membuat folder state builder</string>
+    <string name="apk_builder_state_write_failed">Gagal menyimpan folder proyek: %1$s</string>
+    <string name="apk_builder_toast_press_1">Di terminal: tekan 1 lalu Enter</string>
+    <string name="apk_builder_toast_press_2">Di terminal: tekan 2 lalu Enter</string>
 
     <string name="action_report_issue">Report Issue</string>
     <string name="msg_generating_report">Generating Report</string>

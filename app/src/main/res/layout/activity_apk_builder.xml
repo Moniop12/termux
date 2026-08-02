@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#000000">
+
+    <androidx.appcompat.widget.Toolbar
+        android:id="@+id/apk_builder_toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:background="#101010"
+        app:titleTextColor="#FFFFFF"
+        app:title="@string/apk_builder_title" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/apk_builder_script_label"
+                android:textColor="#B0B0B0"
+                android:textSize="13sp" />
+
+            <TextView
+                android:id="@+id/apk_builder_script_path"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:textColor="#4CAF50"
+                android:fontFamily="monospace"
+                android:textSize="12sp"
+                android:maxLines="2"
+                android:ellipsize="middle" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/apk_builder_pick_script"
+                style="?attr/materialButtonOutlinedStyle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/apk_builder_pick_script_button" />
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginTop="20dp"
+                android:layout_marginBottom="20dp"
+                android:background="#1A1A1A" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/apk_builder_project_label"
+                android:textColor="#B0B0B0"
+                android:textSize="13sp" />
+
+            <TextView
+                android:id="@+id/apk_builder_project_path"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:textColor="#4CAF50"
+                android:fontFamily="monospace"
+                android:textSize="12sp"
+                android:maxLines="2"
+                android:ellipsize="middle" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/apk_builder_pick_project"
+                style="?attr/materialButtonOutlinedStyle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/apk_builder_pick_project_button" />
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginTop="20dp"
+                android:layout_marginBottom="20dp"
+                android:background="#1A1A1A" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/apk_builder_build_debug"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:enabled="false"
+                android:text="@string/apk_builder_build_debug_button" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/apk_builder_build_release"
+                style="?attr/materialButtonOutlinedStyle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:enabled="false"
+                android:text="@string/apk_builder_build_release_button" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:textColor="#808080"
+                android:textSize="12sp"
+                android:text="@string/apk_builder_hint" />
+
+        </LinearLayout>
+    </ScrollView>
+
+</LinearLayout>

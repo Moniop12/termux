@@ -106,4 +106,12 @@
             android:visibility="gone" />
     </FrameLayout>
 
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/file_browser_pick_folder_button"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_margin="12dp"
+        android:text="@string/file_browser_pick_folder_button"
+        android:visibility="gone" />
+
 </LinearLayout>
