@@ -28,5 +28,6 @@ jobs:
         java-version: '17'
     - name: Execute tests
       run: |
+        chmod +x ./gradlew
         ./gradlew test
 

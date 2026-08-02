@@ -26,6 +26,9 @@ jobs:
         with:
           ref: ${{ env.GITHUB_REF }}
 
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
       - name: Build and attach APKs to release
         shell: bash {0}
         env:
