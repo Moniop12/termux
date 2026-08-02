@@ -110,6 +110,7 @@
 
     <!-- TermuxMod: APK Builder -->
     <string name="action_open_apk_builder">APK Builder</string>
+    <string name="action_open_drawer_menu">Menu</string>
     <string name="apk_builder_title">APK Builder</string>
     <string name="apk_builder_not_selected">Belum dipilih</string>
     <string name="apk_builder_script_label">Script Builder (.sh)</string>

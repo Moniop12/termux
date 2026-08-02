@@ -29,6 +29,17 @@ Base: source resmi termux-app (upstream, tidak dimodifikasi packagenya/nama app-
 - Entry point: tombol wrench di drawer (sebelah Files).
 - **V2 (belum dikerjain)**: full headless — terminal gak kebuka sama sekali, log native di layar sendiri. Butuh switch ke `Runner.APP_SHELL` + custom log-streaming UI.
 
+## 5. Redesign UI: extra-keys row & tombol menu
+- **Baris tombol ekstra terminal** (`TermuxPropertyConstants.DEFAULT_IVALUE_EXTRA_KEYS`) diganti dari `ESC / — HOME ↑ END PGUP` (jarang kepake) jadi:
+  - Baris 1: `TAB CTRL ALT ← ↑ ↓ →` (masih perlu buat navigasi/shortcut manual)
+  - Baris 2: **Stop** (kirim Ctrl+C — hentiin proses yang lagi jalan), **Bersihkan** (Ctrl+L — bersihin layar), **Keluar** (Ctrl+D), **Tempel/PASTE** (paste clipboard 1 tap), **⌨ KEYBOARD** (toggle keyboard)
+  - Ini cuma ganti default bawaan — kalau user (kamu atau siapapun install app-nya) udah punya `~/.termux/termux.properties` sendiri, gak kesentuh/gak ke-override.
+  - **Copy** teks gak perlu tombol baru — itu udah jalan lewat long-press+drag (seleksi teks native Android), bukan lewat baris extra-keys.
+- **Tombol menu selalu keliatan**: nambah floating button bulat (☰) di pojok kiri-atas layar terminal, klik langsung buka drawer — gak perlu lagi swipe dari tepi layar.
+
+## Belum dikerjain (dibahas terpisah, scope-nya besar)
+1. **APK Builder V2 (full native, tanpa buka terminal)**: perlu switch dari `Runner.TERMINAL_SESSION` ke `Runner.APP_SHELL` (eksekusi headless) + layar log streaming native + UI buat import NDK/dependency/backup zip (ganti menu import/export di script kamu). Ini proyek tersendiri, belum mulai.
+
 ## Yang PERLU kamu cek/lakukan sebelum build
 1. ~~Download bootstrap-aarch64.zip manual~~ — TIDAK PERLU, sudah auto lewat Gradle task `downloadBootstraps`.
 2. Sync Gradle / build via GitHub Actions.

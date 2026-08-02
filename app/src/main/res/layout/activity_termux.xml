@@ -112,6 +112,22 @@
 
         </androidx.drawerlayout.widget.DrawerLayout>
 
+        <!-- TermuxMod: always-visible menu button, so opening the drawer doesn't
+             require a swipe-from-edge gesture (easy to miss/annoying on a phone). -->
+        <ImageButton
+            android:id="@+id/menu_button"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_alignParentTop="true"
+            android:layout_alignParentStart="true"
+            android:layout_marginTop="10dp"
+            android:layout_marginStart="6dp"
+            android:elevation="8dp"
+            android:padding="8dp"
+            android:src="@drawable/ic_menu_termuxmod"
+            android:background="@drawable/bg_menu_button_circle"
+            android:contentDescription="@string/action_open_drawer_menu" />
+
         <androidx.viewpager.widget.ViewPager
             android:id="@+id/terminal_toolbar_view_pager"
             android:visibility="gone"

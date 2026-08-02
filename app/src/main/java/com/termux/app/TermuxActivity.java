@@ -251,6 +251,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         setApkBuilderButtonView();
 
+        setMenuButtonView();
+
         setNewSessionButtonView();
 
         setToggleKeyboardView();
@@ -602,6 +604,16 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             if (drawer != null) drawer.closeDrawers();
             ActivityUtils.startActivity(this,
                 new Intent(this, com.termux.app.apkbuilder.ApkBuilderActivity.class));
+        });
+    }
+
+    /** TermuxMod: floating button that opens the drawer, so people don't have to
+     * discover/perform the swipe-from-edge gesture just to reach Settings/Files/etc. */
+    private void setMenuButtonView() {
+        ImageButton menuButton = findViewById(R.id.menu_button);
+        menuButton.setOnClickListener(v -> {
+            DrawerLayout drawer = getDrawer();
+            if (drawer != null) drawer.openDrawer(android.view.Gravity.START);
         });
     }
 

@@ -326,7 +326,18 @@ public final class TermuxPropertyConstants {
     /** Defines the key for extra keys */
     public static final String KEY_EXTRA_KEYS =  "extra-keys"; // Default: "extra-keys"
     //public static final String DEFAULT_IVALUE_EXTRA_KEYS = "[[ESC, TAB, CTRL, ALT, {key: '-', popup: '|'}, DOWN, UP]]"; // Single row
-    public static final String DEFAULT_IVALUE_EXTRA_KEYS = "[['ESC','/',{key: '-', popup: '|'},'HOME','UP','END','PGUP'], ['TAB','CTRL','ALT','LEFT','DOWN','RIGHT','PGDN']]"; // Double row
+    // TermuxMod: replaced the stock ESC/HOME/END/PGUP/PGDN row (rarely used by
+    // most people, confusing on a phone) with labeled action buttons + the
+    // arrow/modifier keys that are actually needed day-to-day. "Stop"/"Bersihkan"/
+    // "Keluar" send the same Ctrl+C / Ctrl+L / Ctrl+D a keyboard user would type,
+    // just as one tap. Users who want the original layout (or their own) can still
+    // override this via ~/.termux/termux.properties as usual — this only changes
+    // the out-of-the-box default.
+    public static final String DEFAULT_IVALUE_EXTRA_KEYS =
+        "[" +
+            "['TAB','CTRL','ALT','LEFT','UP','DOWN','RIGHT']," +
+            "[{macro: 'CTRL c', display: 'Stop'},{macro: 'CTRL l', display: 'Bersihkan'},{macro: 'CTRL d', display: 'Keluar'},'PASTE','KEYBOARD']" +
+        "]"; // Double row
 
     /** Defines the key for extra keys style */
     public static final String KEY_EXTRA_KEYS_STYLE =  "extra-keys-style"; // Default: "extra-keys-style"
