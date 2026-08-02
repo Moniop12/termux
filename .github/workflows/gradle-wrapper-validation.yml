@@ -20,6 +20,6 @@ jobs:
       SIGNING_KEY_PASS: ${{ vars.SIGNING_KEY_PASS }}
       SIGNING_KEY_PATH: ${{ vars.SIGNING_KEY_PATH }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: gradle/actions/wrapper-validation@5
 
