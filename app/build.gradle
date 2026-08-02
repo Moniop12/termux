@@ -66,18 +66,18 @@ android {
             }
         }
 
-        // TermuxMod: arm64-v8a only, drop x86/x86_64/armeabi-v7a entirely so
-        // ndk-build never compiles the other bootstrap blobs.
-        ndk {
-            abiFilters "arm64-v8a"
-        }
+        // TermuxMod: arm64-v8a only. Note: we intentionally do NOT also set
+        // ndk.abiFilters here — modern Gradle/AGP rejects the same ABI being
+        // declared in both ndk.abiFilters and splits.abi.include at once
+        // ("Conflicting configuration"). splits.abi.include below is what
+        // upstream termux-app already used to control which ABI(s) get built
+        // for the app module, so it alone is sufficient here.
 
         splits {
             abi {
-                // TermuxMod: kept enabled (with only arm64-v8a listed) purely so the
-                // output APK is named "..._arm64-v8a.apk" instead of being mislabeled
-                // "..._universal.apk" by the outputFileName logic below. The APK content
-                // is arm64-only either way — this only affects the filename.
+                // Kept enabled (with only arm64-v8a listed) so the output APK is
+                // named "..._arm64-v8a.apk" instead of "..._universal.apk", and so
+                // only arm64-v8a native code ever gets built for this module.
                 enable true
                 reset ()
                 include 'arm64-v8a'
