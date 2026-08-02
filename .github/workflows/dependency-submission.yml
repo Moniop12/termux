@@ -11,11 +11,6 @@ permissions:
 jobs:
   dependency-submission:
     runs-on: ubuntu-latest
-    env:
-      SIGNING_ALIAS: ${{ vars.SIGNING_ALIAS }}
-      SIGNING_STORE_PASS: ${{ vars.SIGNING_STORE_PASS }}
-      SIGNING_KEY_PASS: ${{ vars.SIGNING_KEY_PASS }}
-      SIGNING_KEY_PATH: ${{ vars.SIGNING_KEY_PATH }}
     steps:
     - name: Checkout sources
       uses: actions/checkout@v6
@@ -26,4 +21,3 @@ jobs:
         java-version: 17
     - name: Generate and submit dependency graph
       uses: gradle/actions/dependency-submission@v5
-
