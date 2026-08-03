@@ -119,11 +119,29 @@
     <string name="apk_builder_pick_project_button">Pilih Folder Proyek</string>
     <string name="apk_builder_build_debug_button">🚀 Build Debug</string>
     <string name="apk_builder_build_release_button">🔒 Build Release</string>
-    <string name="apk_builder_hint">Terminal akan terbuka menjalankan script kamu. Tinggal tekan \"1\" (Debug) atau \"2\" (Release) lalu Enter — folder proyek sudah otomatis tersimpan sebagai \"proyek terakhir\", jadi tinggal Enter buat pakai itu.</string>
+    <string name="apk_builder_hint">Build jalan di background — gak ada terminal yang kebuka. Progress &amp; log muncul di layar sendiri, tinggal tunggu sampai selesai.</string>
     <string name="apk_builder_state_dir_failed">Gagal membuat folder state builder</string>
     <string name="apk_builder_state_write_failed">Gagal menyimpan folder proyek: %1$s</string>
-    <string name="apk_builder_toast_press_1">Di terminal: tekan 1 lalu Enter</string>
-    <string name="apk_builder_toast_press_2">Di terminal: tekan 2 lalu Enter</string>
+
+    <string name="apk_builder_setup_label">Setup &amp; Backup</string>
+    <string name="apk_builder_auto_setup_button">🛠️ Auto-Setup Environment</string>
+    <string name="apk_builder_auto_setup_title">Auto-Setup Environment</string>
+    <string name="apk_builder_import_zip_button">📥 Import Backup / NDK (.zip)</string>
+    <string name="apk_builder_import_copy_failed">Gagal menyalin file: %1$s</string>
+    <string name="apk_builder_import_ready_title">Siap Diimport</string>
+    <string name="apk_builder_import_ready_message">File \"%1$s\" sudah disalin ke /sdcard. Jalankan import sekarang?</string>
+    <string name="apk_builder_import_ready_run">Jalankan Import</string>
+
+    <string name="apk_builder_log_title">APK Builder</string>
+    <string name="apk_builder_log_title_debug">Build Debug</string>
+    <string name="apk_builder_log_title_release">Build Release</string>
+    <string name="apk_builder_log_title_import">Import Backup</string>
+    <string name="apk_builder_log_status_running">Sedang berjalan…</string>
+    <string name="apk_builder_log_status_stopping">Menghentikan…</string>
+    <string name="apk_builder_log_status_success">✅ Selesai</string>
+    <string name="apk_builder_log_status_failed">❌ Gagal (kode %1$d)</string>
+    <string name="apk_builder_log_stop_button">Stop</string>
+    <string name="apk_builder_log_close_button">Tutup</string>
 
     <string name="action_report_issue">Report Issue</string>
     <string name="msg_generating_report">Generating Report</string>

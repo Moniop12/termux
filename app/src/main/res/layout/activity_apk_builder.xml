@@ -91,6 +91,38 @@
                 android:layout_marginBottom="20dp"
                 android:background="#1A1A1A" />
 
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/apk_builder_setup_label"
+                android:textColor="#B0B0B0"
+                android:textSize="13sp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/apk_builder_auto_setup"
+                style="?attr/materialButtonOutlinedStyle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:enabled="false"
+                android:text="@string/apk_builder_auto_setup_button" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/apk_builder_import_zip"
+                style="?attr/materialButtonOutlinedStyle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:enabled="false"
+                android:text="@string/apk_builder_import_zip_button" />
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginTop="20dp"
+                android:layout_marginBottom="20dp"
+                android:background="#1A1A1A" />
+
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/apk_builder_build_debug"
                 android:layout_width="match_parent"

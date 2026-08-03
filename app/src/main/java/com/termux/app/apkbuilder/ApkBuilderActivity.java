@@ -1,58 +1,60 @@
 package com.termux.app.apkbuilder;
 
 import android.content.Intent;
-import android.net.Uri;
 import android.os.Bundle;
+import android.os.Environment;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
 
 import com.google.android.material.button.MaterialButton;
 import com.termux.R;
-import com.termux.app.TermuxService;
 import com.termux.app.filebrowser.FileBrowserActivity;
 import com.termux.shared.termux.TermuxConstants;
-import com.termux.shared.termux.TermuxConstants.TERMUX_APP.TERMUX_SERVICE;
 import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
 
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.text.SimpleDateFormat;
+import java.util.Locale;
 
 /**
- * TermuxMod: a native front-end for the user's own APK-builder shell script
- * (e.g. "TERMUX APK BUILDER PRO" style scripts). Lets them pick the script
- * once and the project folder via the file browser instead of typing paths,
- * then launches the build in a visible Termux terminal session (V1 scope —
- * terminal stays open so progress/output can be seen).
+ * TermuxMod: native front-end for the user's own APK-builder shell script
+ * (V2 — fully headless, no visible terminal for any of this).
  *
- * How the automation works without touching the user's script at all: their
- * script already supports "save last project" + "press Enter to reuse it" at
- * its own interactive menu (a state file holding the last picked path). We
- * write the picked folder into that same state file before launching, so the
- * only thing left to do inside the terminal is press "1"/"2" for
- * Debug/Release then Enter to reuse the project — no folder navigation or
- * typing needed anymore.
+ * All actions (build, import backup/NDK) run via {@link ApkBuilderRunner}
+ * (background {@code AppShell}, not a terminal session) and stream their
+ * output live into {@link ApkBuilderLogActivity}. The script itself is never
+ * modified — this only automates the same keystrokes ("1", "y", Enter, etc.)
+ * a person would type at its interactive menu, see
+ * {@link ApkBuilderRunner.StdinScripts}.
  *
- * Note: this does NOT auto-press those keys for you. Android's
- * ACTION_SERVICE_EXECUTE stdin extra only feeds input to the headless
- * "app shell" runner, not to an interactive terminal session — there is no
- * working way to script keystrokes into a real pty from here. Full
- * hands-off automation (zero terminal interaction) needs the headless
- * runner + a native progress/log screen instead of a terminal, which is a
- * separate, bigger change (V2).
+ * IMPORTANT — these stdin keystroke sequences and the "import zip" file
+ * naming/location are matched to this specific script's menu layout and
+ * import_backup() logic (main menu: 1=Debug, 2=Release, 3=Auto-Setup,
+ * 5=Import Backup, 6=Export Backup; import expects
+ * /sdcard/builder-backup-complete-*.zip). If the script changes its menu
+ * numbers or file-naming convention, these constants need to be updated to
+ * match — they are not derived automatically.
  */
 public class ApkBuilderActivity extends AppCompatActivity {
 
     // TermuxMod: matches the state file convention used by the builder script
     // (APP_STATE_DIR="$HOME/.termux-apk-builder", LAST_PROJECT_FILE="$APP_STATE_DIR/last_project.txt").
-    // If your script uses a different location, change this constant.
     private static final String STATE_DIR_NAME = ".termux-apk-builder";
     private static final String LAST_PROJECT_FILE_NAME = "last_project.txt";
+
+    // TermuxMod: matches import_backup()'s scan pattern
+    // ("ls -t /sdcard/builder-backup-complete-*.zip") in the builder script.
+    private static final String BACKUP_ZIP_PREFIX = "builder-backup-complete-";
 
     private TermuxAppSharedPreferences mPreferences;
     private TextView mScriptPathText;
@@ -82,6 +84,14 @@ public class ApkBuilderActivity extends AppCompatActivity {
             refreshUi();
         });
 
+    private final ActivityResultLauncher<Intent> mPickZipLauncher =
+        registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
+            if (result.getResultCode() != RESULT_OK || result.getData() == null) return;
+            String path = result.getData().getStringExtra(FileBrowserActivity.RESULT_EXTRA_PATH);
+            if (path == null) return;
+            onZipPicked(new File(path));
+        });
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -109,6 +119,15 @@ public class ApkBuilderActivity extends AppCompatActivity {
             mPickProjectLauncher.launch(intent);
         });
 
+        findViewById(R.id.apk_builder_import_zip).setOnClickListener(v -> {
+            Intent intent = new Intent(this, FileBrowserActivity.class);
+            intent.putExtra(FileBrowserActivity.EXTRA_PICK_MODE, FileBrowserActivity.PICK_MODE_FILE);
+            mPickZipLauncher.launch(intent);
+        });
+
+        findViewById(R.id.apk_builder_auto_setup).setOnClickListener(v -> runHeadless(
+            getString(R.string.apk_builder_auto_setup_title), ApkBuilderRunner.StdinScripts.AUTO_SETUP));
+
         mBuildDebugButton.setOnClickListener(v -> startBuild("debug"));
         mBuildReleaseButton.setOnClickListener(v -> startBuild("release"));
 
@@ -123,14 +142,13 @@ public class ApkBuilderActivity extends AppCompatActivity {
         boolean canBuild = mScriptPath != null && new File(mScriptPath).isFile() && mProjectPath != null;
         mBuildDebugButton.setEnabled(canBuild);
         mBuildReleaseButton.setEnabled(canBuild);
+        findViewById(R.id.apk_builder_auto_setup).setEnabled(mScriptPath != null);
+        findViewById(R.id.apk_builder_import_zip).setEnabled(mScriptPath != null);
     }
 
     /**
      * Writes the picked project path into the script's own "last project" state
-     * file, then launches the script in a visible terminal session. The user
-     * still needs to tap "1"/"2" (Debug/Release) then Enter inside the terminal
-     * — see the class javadoc for why that can't be automated in this (V1) mode.
-     * The script itself is not modified in any way.
+     * file, then runs it headlessly with the Debug/Release menu keystrokes.
      */
     private void startBuild(String buildType) {
         if (mScriptPath == null || mProjectPath == null) return;
@@ -148,21 +166,48 @@ public class ApkBuilderActivity extends AppCompatActivity {
             return;
         }
 
-        String bashPath = TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/bash";
-        Intent execIntent = new Intent(TERMUX_SERVICE.ACTION_SERVICE_EXECUTE, Uri.parse("file://" + bashPath), this, TermuxService.class);
-        execIntent.putExtra(TERMUX_SERVICE.EXTRA_ARGUMENTS, new String[]{mScriptPath});
-        execIntent.putExtra(TERMUX_SERVICE.EXTRA_WORKDIR, TermuxConstants.TERMUX_HOME_DIR_PATH);
-        execIntent.putExtra(TERMUX_SERVICE.EXTRA_COMMAND_LABEL, "APK Builder (" + buildType + ")");
+        String stdin = "debug".equals(buildType)
+            ? ApkBuilderRunner.StdinScripts.BUILD_DEBUG
+            : ApkBuilderRunner.StdinScripts.BUILD_RELEASE;
+        String title = "debug".equals(buildType)
+            ? getString(R.string.apk_builder_log_title_debug)
+            : getString(R.string.apk_builder_log_title_release);
+        runHeadless(title, stdin);
+    }
 
-        Toast.makeText(this, "debug".equals(buildType)
-            ? R.string.apk_builder_toast_press_1
-            : R.string.apk_builder_toast_press_2, Toast.LENGTH_LONG).show();
+    /** Copies the picked zip to where import_backup() expects it, then asks to run import now. */
+    private void onZipPicked(File pickedZip) {
+        File sdcard = Environment.getExternalStorageDirectory();
+        String stamp = new SimpleDateFormat("yyyyMMdd-HHmm", Locale.US).format(new java.util.Date());
+        File destZip = new File(sdcard, BACKUP_ZIP_PREFIX + stamp + ".zip");
 
-        try {
-            startService(execIntent);
-            finish(); // Let TermuxActivity come to foreground and show the terminal.
-        } catch (Exception e) {
-            Toast.makeText(this, e.getMessage(), Toast.LENGTH_LONG).show();
+        try (FileInputStream in = new FileInputStream(pickedZip);
+             FileOutputStream out = new FileOutputStream(destZip)) {
+            byte[] buffer = new byte[64 * 1024];
+            int read;
+            while ((read = in.read(buffer)) != -1) {
+                out.write(buffer, 0, read);
+            }
+        } catch (IOException e) {
+            Toast.makeText(this, getString(R.string.apk_builder_import_copy_failed, e.getMessage()), Toast.LENGTH_LONG).show();
+            return;
         }
+
+        new AlertDialog.Builder(this)
+            .setTitle(R.string.apk_builder_import_ready_title)
+            .setMessage(getString(R.string.apk_builder_import_ready_message, destZip.getName()))
+            .setPositiveButton(R.string.apk_builder_import_ready_run, (d, w) ->
+                runHeadless(getString(R.string.apk_builder_log_title_import), ApkBuilderRunner.StdinScripts.IMPORT_BACKUP))
+            .setNegativeButton(R.string.file_browser_cancel, null)
+            .show();
+    }
+
+    private void runHeadless(String title, String stdinScript) {
+        if (mScriptPath == null) return;
+        Intent intent = new Intent(this, ApkBuilderLogActivity.class);
+        intent.putExtra(ApkBuilderLogActivity.EXTRA_SCRIPT_PATH, mScriptPath);
+        intent.putExtra(ApkBuilderLogActivity.EXTRA_STDIN_SCRIPT, stdinScript);
+        intent.putExtra(ApkBuilderLogActivity.EXTRA_TITLE, title);
+        startActivity(intent);
     }
 }

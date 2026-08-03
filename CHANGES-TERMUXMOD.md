@@ -38,7 +38,24 @@ Base: source resmi termux-app (upstream, tidak dimodifikasi packagenya/nama app-
 - **Tombol menu selalu keliatan**: nambah floating button bulat (☰) di pojok kiri-atas layar terminal, klik langsung buka drawer — gak perlu lagi swipe dari tepi layar.
 
 ## Belum dikerjain (dibahas terpisah, scope-nya besar)
-1. **APK Builder V2 (full native, tanpa buka terminal)**: perlu switch dari `Runner.TERMINAL_SESSION` ke `Runner.APP_SHELL` (eksekusi headless) + layar log streaming native + UI buat import NDK/dependency/backup zip (ganti menu import/export di script kamu). Ini proyek tersendiri, belum mulai.
+1. ~~APK Builder V2 (full native, tanpa buka terminal)~~ — **SUDAH DIKERJAIN**, lihat bagian 6 di bawah.
+
+## 6. APK Builder V2 — full native, headless (terminal gak pernah kebuka)
+- **`AppShell.java` (termux-shared, inti eksekusi background Termux)**: ditambah kemampuan live-streaming stdout/stderr per baris (`AppShellClient.onAppShellStdoutLine/onAppShellStderrLine`, default no-op — gak ganggu kode lain yang udah pakai `AppShellClient`). Sebelumnya output cuma numpuk di `StringBuilder` dan baru kebaca pas proses selesai.
+- **`ApkBuilderRunner.java`** (baru): pembungkus `AppShell` + `TermuxShellEnvironment` (environment setup yang sama persis kayak Termux pake buat eksekusi background resminya — PATH, dll bener). Nyediain `StdinScripts` — daftar urutan tombol yang dikirim otomatis ke menu script kamu:
+  - `BUILD_DEBUG` = `"1\n\n\n0"` (pilih 1 → Enter pakai proyek terakhir → Enter lanjut → 0 keluar)
+  - `BUILD_RELEASE` = `"2\n\n\n0"`
+  - `IMPORT_BACKUP` = `"5\ny\n0"`
+  - `AUTO_SETUP` = `"3\n0"`
+  - `EXPORT_BACKUP` = `"6\n0"`
+  - **PENTING**: angka-angka ini di-hardcode sesuai menu utama script kamu persis (1=Debug, 2=Release, 3=Auto-Setup, 5=Import, 6=Export). Kalau nomor menu di script kamu berubah, ini HARUS disesuaikan manual — gak otomatis ke-detect.
+- **`ApkBuilderLogActivity.java`** (baru): layar log native — nampilin stdout/stderr live (bukan nunggu proses selesai), status banner (Sedang berjalan/Selesai/Gagal), tombol **Stop** (kirim SIGKILL beneran lewat `AppShell.kill()`, bukan cuma UI doang), tombol Tutup (aktif kalau udah selesai). Back button diblokir selama proses masih jalan (biar gak ninggalin build "nyantol" tanpa jalan buat balik liat log-nya).
+- **`ApkBuilderActivity.java`** diupdate:
+  - Tombol Build Debug/Release sekarang manggil `ApkBuilderLogActivity` (headless), BUKAN buka terminal lagi
+  - Tombol baru **Auto-Setup Environment** — jalanin opsi 3 di script kamu headless
+  - Tombol baru **Import Backup/NDK (.zip)** — pilih file zip apapun via file browser, disalin otomatis ke `/sdcard/builder-backup-complete-<timestamp>.zip` (format yang dikenali `import_backup()` di script kamu), lalu tanya konfirmasi sebelum jalanin import
+- **Catatan jujur soal "Import NDK"**: dari yang saya baca di script kamu, `import_backup()` itu SATU fungsi yang nanganin backup lengkap DAN scan NDK archive sekaligus — tapi scan NDK-nya cuma jalan kalau file `builder-backup-complete-*.zip` ketemu duluan (ada pengecekan gate di awal fungsi). Jadi kalau kamu punya NDK zip MURNI (bukan bagian dari backup lengkap), fitur import ini mungkin gak nemu itu sebagai NDK standalone — perlu dicoba langsung di device buat mastiin, saya gak bisa run script kamu buat verifikasi interaktif dari sini.
+- **Belum sempat diverifikasi di device asli** (sama kayak fitur sebelumnya) — terutama urutan stdin buat Auto-Setup (`"3\n0"`), karena saya cuma lihat sebagian kecil dari fungsi `auto_setup()` yang mungkin punya prompt tambahan yang saya lewat.
 
 ## Yang PERLU kamu cek/lakukan sebelum build
 1. ~~Download bootstrap-aarch64.zip manual~~ — TIDAK PERLU, sudah auto lewat Gradle task `downloadBootstraps`.

@@ -176,8 +176,21 @@ public final class AppShell {
 
         // setup stdin, and stdout and stderr gobblers
         DataOutputStream STDIN = new DataOutputStream(mProcess.getOutputStream());
-        StreamGobbler STDOUT = new StreamGobbler(mExecutionCommand.mPid + "-stdout", mProcess.getInputStream(), mExecutionCommand.resultData.stdout, mExecutionCommand.backgroundCustomLogLevel);
-        StreamGobbler STDERR = new StreamGobbler(mExecutionCommand.mPid + "-stderr", mProcess.getErrorStream(), mExecutionCommand.resultData.stderr, mExecutionCommand.backgroundCustomLogLevel);
+        // TermuxMod: switched from the plain StringBuilder-writing StreamGobbler
+        // constructor to the OnLineListener one so we can also notify
+        // mAppShellClient per-line in real time (for live log UIs), while still
+        // filling resultData.stdout/stderr exactly as before for existing callers
+        // that only read the final accumulated result.
+        StreamGobbler STDOUT = new StreamGobbler(mExecutionCommand.mPid + "-stdout", mProcess.getInputStream(),
+            (String line) -> {
+                mExecutionCommand.resultData.stdout.append(line).append("\n");
+                if (mAppShellClient != null) mAppShellClient.onAppShellStdoutLine(this, line);
+            }, null, mExecutionCommand.backgroundCustomLogLevel);
+        StreamGobbler STDERR = new StreamGobbler(mExecutionCommand.mPid + "-stderr", mProcess.getErrorStream(),
+            (String line) -> {
+                mExecutionCommand.resultData.stderr.append(line).append("\n");
+                if (mAppShellClient != null) mAppShellClient.onAppShellStderrLine(this, line);
+            }, null, mExecutionCommand.backgroundCustomLogLevel);
 
         // start gobbling
         STDOUT.start();
@@ -343,6 +356,18 @@ public final class AppShell {
          * @param appShell The {@link AppShell} that exited.
          */
         void onAppShellExited(AppShell appShell);
+
+        /**
+         * TermuxMod: optional live callback for each stdout line as it's produced,
+         * for UIs that want to stream output in real time instead of waiting for
+         * the process to exit. Default no-op so existing {@link AppShellClient}
+         * implementations (which only implement {@link #onAppShellExited(AppShell)})
+         * keep compiling and behaving exactly as before.
+         */
+        default void onAppShellStdoutLine(@NonNull AppShell appShell, @NonNull String line) {}
+
+        /** TermuxMod: same as {@link #onAppShellStdoutLine(AppShell, String)} but for stderr. */
+        default void onAppShellStderrLine(@NonNull AppShell appShell, @NonNull String line) {}
 
     }
 
