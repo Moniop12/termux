@@ -113,8 +113,6 @@
     <string name="action_open_drawer_menu">Menu</string>
     <string name="apk_builder_title">APK Builder</string>
     <string name="apk_builder_not_selected">Belum dipilih</string>
-    <string name="apk_builder_script_label">Script Builder (.sh)</string>
-    <string name="apk_builder_pick_script_button">Pilih Script</string>
     <string name="apk_builder_project_label">Folder Proyek</string>
     <string name="apk_builder_pick_project_button">Pilih Folder Proyek</string>
     <string name="apk_builder_build_debug_button">🚀 Build Debug</string>
@@ -122,6 +120,8 @@
     <string name="apk_builder_hint">Build jalan di background — gak ada terminal yang kebuka. Progress &amp; log muncul di layar sendiri, tinggal tunggu sampai selesai.</string>
     <string name="apk_builder_state_dir_failed">Gagal membuat folder state builder</string>
     <string name="apk_builder_state_write_failed">Gagal menyimpan folder proyek: %1$s</string>
+    <string name="apk_builder_script_extract_failed">Gagal menyiapkan builder: %1$s</string>
+    <string name="apk_builder_copying_zip">Menyalin file, mohon tunggu (bisa beberapa menit untuk file besar)…</string>
 
     <string name="apk_builder_setup_label">Setup &amp; Backup</string>
     <string name="apk_builder_auto_setup_button">🛠️ Auto-Setup Environment</string>

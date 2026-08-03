@@ -57,6 +57,17 @@ Base: source resmi termux-app (upstream, tidak dimodifikasi packagenya/nama app-
 - **Catatan jujur soal "Import NDK"**: dari yang saya baca di script kamu, `import_backup()` itu SATU fungsi yang nanganin backup lengkap DAN scan NDK archive sekaligus — tapi scan NDK-nya cuma jalan kalau file `builder-backup-complete-*.zip` ketemu duluan (ada pengecekan gate di awal fungsi). Jadi kalau kamu punya NDK zip MURNI (bukan bagian dari backup lengkap), fitur import ini mungkin gak nemu itu sebagai NDK standalone — perlu dicoba langsung di device buat mastiin, saya gak bisa run script kamu buat verifikasi interaktif dari sini.
 - **Belum sempat diverifikasi di device asli** (sama kayak fitur sebelumnya) — terutama urutan stdin buat Auto-Setup (`"3\n0"`), karena saya cuma lihat sebagian kecil dari fungsi `auto_setup()` yang mungkin punya prompt tambahan yang saya lewat.
 
+## 7. APK Builder V3 — fix bug + script dibundle + posisi UI diperbaiki
+Respons langsung ke feedback: bug ANR, "masih nyuruh pilih script", tombol menu gak jelas, posisi APK Builder.
+
+- **Fix ANR ("Termux tidak menanggapi")**: root cause-nya nyalin file zip (NDK >1GB) dilakuin di **main thread** — Android nganggep app hang. Sekarang semua copy file (import zip DAN extract script bundled) jalan di background thread + ada overlay "Menyalin file, mohon tunggu..." biar keliatan lagi kerja, bukan freeze.
+- **Script gak perlu dipilih lagi**: `build.sh` (persis kiriman kamu) di-bundle sebagai asset APK (`app/src/main/assets/apkbuilder/build.sh`), di-extract otomatis ke `~/.termux-apk-builder/build.sh` tiap `ApkBuilderActivity` dibuka. Tombol "Pilih Script" dihapus total. User cuma milih folder proyek.
+  - **Logic build TETAP di script (bash), TIDAK diterjemahin ke Java** — sesuai arahan kamu, biar risiko rendah (logic udah kebukti jalan, gak usah ditulis ulang). Yang jadi Java cuma orkestrasi menu (Build/Setup/Import jadi tombol) + log native.
+  - Nanti kalau mau pindah ke online (biar update tanpa rebuild APK): tinggal ganti `extractBundledScript()` di `ApkBuilderActivity.java` jadi download dari URL, bukan copy dari assets. Belum dikerjain sesuai request kamu (tes bundle dulu).
+- **Tombol menu floating**: kontrasnya diperbaiki — background solid hijau + border putih (sebelumnya hitam transparan, ilang di atas terminal item).
+- **APK Builder pindah posisi**: dari icon row atas (sejajar Settings/Files) ke **row mirip item sesi**, nempel tepat di atas daftar sesi terminal di drawer — biar kerasa "buka ini" bukan "buka menu app lain".
+
+
 ## Yang PERLU kamu cek/lakukan sebelum build
 1. ~~Download bootstrap-aarch64.zip manual~~ — TIDAK PERLU, sudah auto lewat Gradle task `downloadBootstraps`.
 2. Sync Gradle / build via GitHub Actions.

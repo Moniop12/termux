@@ -135,15 +135,6 @@ public final class TermuxPreferenceConstants {
 
 
         /**
-         * TermuxMod: Defines the key for the absolute path to the user's chosen
-         * APK-builder shell script (e.g. their custom build.sh), remembered so the
-         * APK Builder screen doesn't need to ask for it every time.
-         */
-        public static final String KEY_APK_BUILDER_SCRIPT_PATH = "termuxmod_apk_builder_script_path";
-        public static final String DEFAULT_VALUE_KEY_APK_BUILDER_SCRIPT_PATH = null;
-
-
-        /**
          * Defines the key for font size of termux terminal view.
          */
         public static final String KEY_FONTSIZE = "fontsize";
