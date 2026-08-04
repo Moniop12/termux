@@ -3,7 +3,6 @@ package com.termux.app.apkbuilder;
 import android.content.Context;
 
 import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
 
 import com.termux.shared.shell.command.ExecutionCommand;
 import com.termux.shared.shell.command.ExecutionCommand.Runner;
@@ -11,17 +10,26 @@ import com.termux.shared.shell.command.runner.app.AppShell;
 import com.termux.shared.termux.TermuxConstants;
 import com.termux.shared.termux.shell.command.environment.TermuxShellEnvironment;
 
+import java.util.HashMap;
+
 /**
- * TermuxMod: runs the user's builder script headlessly (no visible terminal),
+ * TermuxMod: runs the bundled builder script headlessly (no visible terminal),
  * using the same {@link AppShell} + {@link TermuxShellEnvironment} machinery
  * Termux itself uses for its "background/plugin" execution mode — this is
  * what guarantees PATH, JAVA_HOME-equivalents and the termux-exec loader are
  * set up correctly, same as a real interactive shell would have.
  *
- * The whole point of this class is to feed the script's own interactive menu
- * with the keystrokes it would normally get typed by hand (see
- * {@link StdinScripts}), and surface stdout/stderr live via {@link Listener}
- * instead of only after the process exits.
+ * V2: instead of feeding the script's interactive menu with pre-typed
+ * keystrokes over stdin (fragile — broke if the number/order of prompts
+ * didn't match exactly, which is what caused the "Pilihan tidak valid!"
+ * infinite loop / freeze reported after testing), this calls a small
+ * non-interactive entrypoint added to the bundled script itself
+ * (see {@code assets/apkbuilder/build.sh}, the block right above
+ * `while true; do`). The script is invoked as
+ * {@code bash build.sh <action> [project_path]} with
+ * {@code TERMUXMOD_NONINTERACTIVE=1} set, which the script's own prompts
+ * check to skip themselves instead of blocking. Nothing about *what* the
+ * script does was changed, only how it's told what to do.
  */
 public class ApkBuilderRunner implements AppShell.AppShellClient {
 
@@ -32,18 +40,16 @@ public class ApkBuilderRunner implements AppShell.AppShellClient {
         void onFailedToStart();
     }
 
-    /** TermuxMod: canned stdin keystroke sequences matching this specific builder
-     * script's main-menu numbering (1=Debug, 2=Release, 5=Import Backup, 0=Exit).
-     * If the user's script menu differs, these need to be adjusted to match. */
-    public static final class StdinScripts {
-        // "1" build debug -> Enter (use last project) -> Enter (dismiss "press enter to
-        // continue" after build finishes) -> "0" exit back at the main menu.
-        public static final String BUILD_DEBUG = "1\n\n\n0";
-        public static final String BUILD_RELEASE = "2\n\n\n0";
-        // "5" import backup -> "y" confirm restore -> "0" exit once back at main menu.
-        public static final String IMPORT_BACKUP = "5\ny\n0";
-        public static final String AUTO_SETUP = "3\n0";
-        public static final String EXPORT_BACKUP = "6\n0";
+    /** TermuxMod: action names matching the non-interactive dispatcher added to
+     * the bundled build.sh (see the "TermuxMod: NON-INTERACTIVE ENTRYPOINT"
+     * block near the end of that file). */
+    public static final class Actions {
+        public static final String BUILD_DEBUG = "build-debug";
+        public static final String BUILD_RELEASE = "build-release";
+        public static final String AUTO_SETUP = "auto-setup";
+        public static final String CLEAN_CACHE = "clean-cache";
+        public static final String IMPORT_BACKUP = "import-backup";
+        public static final String EXPORT_BACKUP = "export-backup";
     }
 
     private final Listener mListener;
@@ -53,23 +59,32 @@ public class ApkBuilderRunner implements AppShell.AppShellClient {
         mListener = listener;
     }
 
-    /** Starts the script running in the background. Safe to call once per instance. */
-    public void run(@NonNull Context context, @NonNull String scriptPath, @NonNull String stdinScript) {
+    /**
+     * Starts the script running in the background with the given action (see
+     * {@link Actions}). {@code projectPath} may be null for actions that don't
+     * need one (auto-setup, clean-cache, import-backup, export-backup).
+     * Safe to call once per instance.
+     */
+    public void run(@NonNull Context context, @NonNull String scriptPath, @NonNull String action, String projectPath) {
         String bashPath = TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/bash";
 
         ExecutionCommand executionCommand = new ExecutionCommand();
         executionCommand.executable = bashPath;
-        executionCommand.arguments = new String[]{scriptPath};
+        executionCommand.arguments = projectPath != null
+            ? new String[]{scriptPath, action, projectPath}
+            : new String[]{scriptPath, action};
         executionCommand.workingDirectory = TermuxConstants.TERMUX_HOME_DIR_PATH;
-        executionCommand.stdin = stdinScript;
         executionCommand.runner = Runner.APP_SHELL.getName();
-        executionCommand.commandLabel = "APK Builder";
+        executionCommand.commandLabel = "APK Builder (" + action + ")";
         executionCommand.backgroundCustomLogLevel = null;
         // Matches what TermuxService itself sets for its own APP_SHELL runner calls,
         // so the environment setup here is identical to Termux's own background execution.
         executionCommand.setShellCommandShellEnvironment = true;
 
-        mAppShell = AppShell.execute(context, executionCommand, this, new TermuxShellEnvironment(), null, false);
+        HashMap<String, String> additionalEnvironment = new HashMap<>();
+        additionalEnvironment.put("TERMUXMOD_NONINTERACTIVE", "1");
+
+        mAppShell = AppShell.execute(context, executionCommand, this, new TermuxShellEnvironment(), additionalEnvironment, false);
         if (mAppShell == null) {
             mListener.onFailedToStart();
         }

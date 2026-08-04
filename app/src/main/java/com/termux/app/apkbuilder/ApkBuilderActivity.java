@@ -25,7 +25,6 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.PrintWriter;
 import java.text.SimpleDateFormat;
 import java.util.Locale;
 
@@ -39,8 +38,8 @@ import java.util.Locale;
  * their PROJECT folder; the script is an implementation detail they never
  * see or choose.
  *
- * Everything about how the menu keystrokes are automated
- * ({@link ApkBuilderRunner.StdinScripts}) and how output streams live into
+ * Everything about how the actions are dispatched to the script
+ * (see {@link ApkBuilderRunner.Actions}) and how output streams live into
  * {@link ApkBuilderLogActivity} is unchanged from before — only the "where
  * does the script come from" part changed here.
  */
@@ -53,7 +52,6 @@ public class ApkBuilderActivity extends AppCompatActivity {
     // (APP_STATE_DIR="$HOME/.termux-apk-builder", LAST_PROJECT_FILE="$APP_STATE_DIR/last_project.txt").
     // The extracted copy of the bundled script also lives in this same folder.
     private static final String STATE_DIR_NAME = ".termux-apk-builder";
-    private static final String LAST_PROJECT_FILE_NAME = "last_project.txt";
     private static final String EXTRACTED_SCRIPT_NAME = "build.sh";
 
     // TermuxMod: matches import_backup()'s scan pattern
@@ -117,7 +115,7 @@ public class ApkBuilderActivity extends AppCompatActivity {
         });
 
         findViewById(R.id.apk_builder_auto_setup).setOnClickListener(v -> runHeadless(
-            getString(R.string.apk_builder_auto_setup_title), ApkBuilderRunner.StdinScripts.AUTO_SETUP));
+            getString(R.string.apk_builder_auto_setup_title), ApkBuilderRunner.Actions.AUTO_SETUP, null));
 
         mBuildDebugButton.setOnClickListener(v -> startBuild("debug"));
         mBuildReleaseButton.setOnClickListener(v -> startBuild("release"));
@@ -164,32 +162,20 @@ public class ApkBuilderActivity extends AppCompatActivity {
     }
 
     /**
-     * Writes the picked project path into the script's own "last project" state
-     * file, then runs it headlessly with the Debug/Release menu keystrokes.
+     * Runs the script headlessly with the Debug/Release action and the picked
+     * project path — the script's own non-interactive entrypoint takes care of
+     * saving it as "last project" and everything else.
      */
     private void startBuild(String buildType) {
         if (mProjectPath == null) return;
 
-        File stateDir = new File(TermuxConstants.TERMUX_HOME_DIR_PATH, STATE_DIR_NAME);
-        if (!stateDir.exists() && !stateDir.mkdirs()) {
-            Toast.makeText(this, R.string.apk_builder_state_dir_failed, Toast.LENGTH_LONG).show();
-            return;
-        }
-        File lastProjectFile = new File(stateDir, LAST_PROJECT_FILE_NAME);
-        try (PrintWriter writer = new PrintWriter(lastProjectFile, "UTF-8")) {
-            writer.println(mProjectPath);
-        } catch (IOException e) {
-            Toast.makeText(this, getString(R.string.apk_builder_state_write_failed, e.getMessage()), Toast.LENGTH_LONG).show();
-            return;
-        }
-
-        String stdin = "debug".equals(buildType)
-            ? ApkBuilderRunner.StdinScripts.BUILD_DEBUG
-            : ApkBuilderRunner.StdinScripts.BUILD_RELEASE;
+        String action = "debug".equals(buildType)
+            ? ApkBuilderRunner.Actions.BUILD_DEBUG
+            : ApkBuilderRunner.Actions.BUILD_RELEASE;
         String title = "debug".equals(buildType)
             ? getString(R.string.apk_builder_log_title_debug)
             : getString(R.string.apk_builder_log_title_release);
-        runHeadless(title, stdin);
+        runHeadless(title, action, mProjectPath);
     }
 
     /**
@@ -223,7 +209,7 @@ public class ApkBuilderActivity extends AppCompatActivity {
                     .setTitle(R.string.apk_builder_import_ready_title)
                     .setMessage(getString(R.string.apk_builder_import_ready_message, destZip.getName()))
                     .setPositiveButton(R.string.apk_builder_import_ready_run, (d, w) ->
-                        runHeadless(getString(R.string.apk_builder_log_title_import), ApkBuilderRunner.StdinScripts.IMPORT_BACKUP))
+                        runHeadless(getString(R.string.apk_builder_log_title_import), ApkBuilderRunner.Actions.IMPORT_BACKUP, null))
                     .setNegativeButton(R.string.file_browser_cancel, null)
                     .show();
             });
@@ -250,10 +236,11 @@ public class ApkBuilderActivity extends AppCompatActivity {
         }
     }
 
-    private void runHeadless(String title, String stdinScript) {
+    private void runHeadless(String title, String action, String projectPath) {
         Intent intent = new Intent(this, ApkBuilderLogActivity.class);
         intent.putExtra(ApkBuilderLogActivity.EXTRA_SCRIPT_PATH, mScriptPath);
-        intent.putExtra(ApkBuilderLogActivity.EXTRA_STDIN_SCRIPT, stdinScript);
+        intent.putExtra(ApkBuilderLogActivity.EXTRA_ACTION, action);
+        if (projectPath != null) intent.putExtra(ApkBuilderLogActivity.EXTRA_PROJECT_PATH, projectPath);
         intent.putExtra(ApkBuilderLogActivity.EXTRA_TITLE, title);
         startActivity(intent);
     }

@@ -21,7 +21,8 @@ import com.termux.R;
 public class ApkBuilderLogActivity extends AppCompatActivity implements ApkBuilderRunner.Listener {
 
     public static final String EXTRA_SCRIPT_PATH = "com.termux.app.apkbuilder.EXTRA_SCRIPT_PATH";
-    public static final String EXTRA_STDIN_SCRIPT = "com.termux.app.apkbuilder.EXTRA_STDIN_SCRIPT";
+    public static final String EXTRA_ACTION = "com.termux.app.apkbuilder.EXTRA_ACTION";
+    public static final String EXTRA_PROJECT_PATH = "com.termux.app.apkbuilder.EXTRA_PROJECT_PATH";
     public static final String EXTRA_TITLE = "com.termux.app.apkbuilder.EXTRA_TITLE";
 
     private final Handler mMainHandler = new Handler(Looper.getMainLooper());
@@ -62,20 +63,35 @@ public class ApkBuilderLogActivity extends AppCompatActivity implements ApkBuild
         mCloseButton.setOnClickListener(v -> finish());
 
         String scriptPath = getIntent().getStringExtra(EXTRA_SCRIPT_PATH);
-        String stdinScript = getIntent().getStringExtra(EXTRA_STDIN_SCRIPT);
+        String action = getIntent().getStringExtra(EXTRA_ACTION);
+        String projectPath = getIntent().getStringExtra(EXTRA_PROJECT_PATH);
 
-        if (scriptPath == null || stdinScript == null) {
-            appendLine("[TermuxMod] Missing script path or stdin script, aborting.", true);
+        if (scriptPath == null || action == null) {
+            appendLine("[TermuxMod] Missing script path or action, aborting.", true);
             onExited(-1);
             return;
         }
 
         mRunner = new ApkBuilderRunner(this);
-        mRunner.run(this, scriptPath, stdinScript);
+        mRunner.run(this, scriptPath, action, projectPath);
+    }
+
+    // TermuxMod: the script prints ANSI color/cursor escape codes meant for a real
+    // terminal (which interprets them into colors/redraws). This plain TextView
+    // can't interpret them, so without stripping they show up as garbage like
+    // "␛[0;36m1␛[0m" — this regex removes SGR color codes and cursor-control
+    // sequences, leaving clean plain text.
+    private static final java.util.regex.Pattern ANSI_PATTERN =
+        java.util.regex.Pattern.compile("\u001B\\[[0-9;?]*[a-zA-Z]");
+
+    private static String stripAnsi(String line) {
+        return ANSI_PATTERN.matcher(line).replaceAll("");
     }
 
     private void appendLine(String line, boolean isStderr) {
-        mLogBuffer.append(line).append('\n');
+        String clean = stripAnsi(line);
+        if (clean.isEmpty()) return; // Many cursor-control-only lines become empty after stripping.
+        mLogBuffer.append(clean).append('\n');
         mLogText.setText(mLogBuffer);
         // Keep the view scrolled to the latest output.
         mLogScroll.post(() -> mLogScroll.fullScroll(android.view.View.FOCUS_DOWN));

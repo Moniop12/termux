@@ -38,6 +38,19 @@ ok()    { echo -e "  ${GREEN}✅ $1${RESET}"; }
 warn()  { echo -e "  ${YELLOW}⚠️  $1${RESET}"; }
 err()   { echo -e "  ${RED}❌ $1${RESET}"; }
 
+# TermuxMod: replaces the various "Tekan [Enter] untuk kembali..." prompts.
+# Added so this script can be driven by the TermuxMod Android UI without a
+# visible terminal — when TERMUXMOD_NONINTERACTIVE=1 is set, this returns
+# immediately instead of blocking forever waiting for input that will never
+# come (which previously caused an infinite "Pilihan tidak valid!" loop once
+# stdin ran out). When run normally from a terminal, behavior is unchanged.
+pause() {
+    if [ "$TERMUXMOD_NONINTERACTIVE" = "1" ]; then
+        return 0
+    fi
+    read -rp "  ↩  Tekan [Enter] untuk kembali..." _
+}
+
 ensure_app_state() {
     mkdir -p "$APP_STATE_DIR" 2>/dev/null || true
 }
@@ -72,20 +85,20 @@ install_launcher() {
 
     if [ ! -f "$source_script" ]; then
         err "Script sumber tidak ditemukan: $source_script"
-        read -rp "  ↩  Tekan [Enter] untuk kembali..." _
+        pause
         return
     fi
 
     cp "$source_script" "$launcher_path" 2>/dev/null || {
         err "Gagal memasang launcher ke $launcher_path"
-        read -rp "  ↩  Tekan [Enter] untuk kembali..." _
+        pause
         return
     }
     chmod +x "$launcher_path" 2>/dev/null || true
 
     ok "Launcher berhasil dipasang"
     info "Sekarang kamu bisa jalanin script dari mana saja cukup ketik: $LAUNCHER_NAME"
-    read -rp "  ↩  Tekan [Enter] untuk kembali..." _
+    pause
 }
 
 collect_android_projects() {
@@ -456,7 +469,7 @@ export_backup() {
     SIZE=$(du -h "$ZIPNAME" 2>/dev/null | cut -f1)
     rm -rf "$STAGE"
     ok "Export Backup Selesai! ($SIZE)"
-    read -rp "  ↩  Tekan [Enter] untuk kembali..." _
+    pause
 }
 
 import_backup() {
@@ -464,11 +477,15 @@ import_backup() {
     echo -e "  ${YELLOW}📥 Import Backup Offline (Pindah HP / Restore)${RESET}\n"
     pkg install p7zip unzip rsync -y 2>/dev/null || true
     BACKUP_FILE=$(ls -t /sdcard/builder-backup-complete-*.zip 2>/dev/null | head -n1)
-    if [ -z "$BACKUP_FILE" ]; then err "Tidak ada file backup ditemukan!"; read -rp "  ↩  Tekan [Enter]..."; return; fi
+    if [ -z "$BACKUP_FILE" ]; then err "Tidak ada file backup ditemukan!"; pause; return; fi
 
     SIZE=$(du -h "$BACKUP_FILE" 2>/dev/null | cut -f1)
     echo -e "  ${GREEN}✅ Ditemukan Backup: $(basename "$BACKUP_FILE") (${SIZE})${RESET}"
-    read -rp "  ▶ Pulihkan dari backup ini? (y/n): " confirm
+    if [ "$TERMUXMOD_NONINTERACTIVE" = "1" ]; then
+        confirm="y"
+    else
+        read -rp "  ▶ Pulihkan dari backup ini? (y/n): " confirm
+    fi
     [[ ! "$confirm" =~ ^[Yy]$ ]] && return
 
     TEMP_RESTORE="$HOME_DIR/.restore-temp"
@@ -604,7 +621,11 @@ build_project() {
     echo -e "  [${CYAN} M${RESET}]  ✏️   Ketik nama folder / path manual"
     echo -e "  [${CYAN} R${RESET}]  🔄  Scan ulang"
     echo -e "  [${CYAN} 0${RESET}]  ↩️   Kembali"
-    read -rp "  ▶ Pilih (nomor/M/R/0, Enter=terakhir): " choice
+    if [ "$TERMUXMOD_NONINTERACTIVE" = "1" ]; then
+        choice=""
+    else
+        read -rp "  ▶ Pilih (nomor/M/R/0, Enter=terakhir): " choice
+    fi
 
     SRC_PATH=""
     case "$choice" in
@@ -772,8 +793,57 @@ EOF
 
     rm -f "$TMP_LOG"
     termux-wake-unlock 2>/dev/null || true
-    read -rp "  ↩  Tekan [Enter] untuk kembali..." _
+    pause
 }
+
+# ═══════════════════════════════════════════════════════════
+#  TermuxMod: NON-INTERACTIVE ENTRYPOINT
+#  Lets the TermuxMod Android app drive this script by argv instead of
+#  simulating menu keystrokes over stdin (which was fragile — any prompt
+#  added/removed later would break it). Added on top, nothing below or
+#  above this block was changed: run with no arguments and you get the
+#  exact same interactive menu as before.
+#
+#  Usage: build.sh <action> [project_path]
+#  Actions: build-debug, build-release, auto-setup, clean-cache,
+#           import-backup, export-backup
+# ═══════════════════════════════════════════════════════════
+if [ -n "$1" ]; then
+    ensure_app_state
+    case "$1" in
+        build-debug)
+            [ -n "$2" ] && save_last_project "$2"
+            build_project "debug"
+            exit 0
+            ;;
+        build-release)
+            [ -n "$2" ] && save_last_project "$2"
+            build_project "release"
+            exit 0
+            ;;
+        auto-setup)
+            auto_setup
+            exit 0
+            ;;
+        clean-cache)
+            rm -rf "$WORKSPACE" "$HOME_DIR/.gradle/daemon"
+            ok "Cache dibersihkan"
+            exit 0
+            ;;
+        import-backup)
+            import_backup
+            exit 0
+            ;;
+        export-backup)
+            export_backup
+            exit 0
+            ;;
+        *)
+            err "TermuxMod: aksi non-interaktif tidak dikenal: $1"
+            exit 1
+            ;;
+    esac
+fi
 
 while true; do
     banner

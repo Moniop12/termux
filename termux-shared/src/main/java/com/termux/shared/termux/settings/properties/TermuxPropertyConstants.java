@@ -263,7 +263,7 @@ public final class TermuxPropertyConstants {
     public static final String KEY_TERMINAL_TOOLBAR_HEIGHT_SCALE_FACTOR =  "terminal-toolbar-height"; // Default: "terminal-toolbar-height"
     public static final float IVALUE_TERMINAL_TOOLBAR_HEIGHT_SCALE_FACTOR_MIN = 0.4f;
     public static final float IVALUE_TERMINAL_TOOLBAR_HEIGHT_SCALE_FACTOR_MAX = 3;
-    public static final float DEFAULT_IVALUE_TERMINAL_TOOLBAR_HEIGHT_SCALE_FACTOR = 1;
+    public static final float DEFAULT_IVALUE_TERMINAL_TOOLBAR_HEIGHT_SCALE_FACTOR = 1.25f; // TermuxMod: was 1, enlarged a bit for easier tapping on phones
 
 
 
@@ -335,7 +335,7 @@ public final class TermuxPropertyConstants {
     // the out-of-the-box default.
     public static final String DEFAULT_IVALUE_EXTRA_KEYS =
         "[" +
-            "['TAB','CTRL','ALT','LEFT','UP','DOWN','RIGHT']," +
+            "['DRAWER','TAB','CTRL','ALT','LEFT','UP','DOWN','RIGHT']," +
             "[{macro: 'CTRL c', display: 'Stop'},{macro: 'CTRL l', display: 'Bersihkan'},{macro: 'CTRL d', display: 'Keluar'},'PASTE','KEYBOARD']" +
         "]"; // Double row
 

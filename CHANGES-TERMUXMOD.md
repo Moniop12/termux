@@ -68,6 +68,21 @@ Respons langsung ke feedback: bug ANR, "masih nyuruh pilih script", tombol menu 
 - **APK Builder pindah posisi**: dari icon row atas (sejajar Settings/Files) ke **row mirip item sesi**, nempel tepat di atas daftar sesi terminal di drawer — biar kerasa "buka ini" bukan "buka menu app lain".
 
 
+## 8. APK Builder V4 — fix bug lanjutan + otomasi yang robust
+Respons ke: blok putih, floating button ganggu, log ANSI kacau, ANR pas nunggu build.
+
+- **Fix blok putih di drawer**: row APK Builder kemarin nyontek `session_background_selected` (drawable buat row session ASLI yang warna teksnya di-set dari kode Java adapter) tanpa saya kasih warna teks sendiri → teks putih di atas background putih = keliatan kosong. Sekarang punya drawable & warna sendiri (`apk_builder_entry_background.xml`, dasar gelap + ripple hijau).
+- **Floating button dihapus, ganti key `DRAWER`**: ternyata Termux upstream udah punya key khusus `DRAWER` (☰, buka/tutup drawer) yang cuma perlu didaftarin di `DEFAULT_IVALUE_EXTRA_KEYS` — nggak perlu kode custom sama sekali (sebelumnya saya bikin ImageButton overlay sendiri yang kontrasnya jelek).
+- **Baris extra-keys diperbesar**: `DEFAULT_IVALUE_TERMINAL_TOOLBAR_HEIGHT_SCALE_FACTOR` 1 → 1.25.
+- **Log ANSI dibersihin**: `ApkBuilderLogActivity` sekarang strip kode escape ANSI (regex) sebelum nampilin baris — sebelumnya kode warna mentah kayak `␛[0;36m` nongol sebagai teks sampah.
+- **Fix akar ANR/freeze "Pilihan tidak valid!" berulang** (bukan soal OOM/ukuran NDK seperti dugaan awal): sebelumnya Java "mengetik" urutan keystroke tetap (`"1\n\n\n0"`) ke stdin lalu nutup stdin — kalau hitungan prompt-nya kurang tepat, `read` di bash ketemu EOF → loop tanpa henti (busy loop, CPU 100%, keliatan freeze). Diganti pendekatan yang jauh lebih robust:
+  - **`build.sh` ditambah non-interactive entrypoint** (~70 baris baru di paling akhir file, sebelum `while true; do` — TIDAK mengubah satupun logic yang sudah ada): dipanggil sebagai `build.sh <action> [project_path]` (actions: `build-debug`, `build-release`, `auto-setup`, `clean-cache`, `import-backup`, `export-backup`), langsung manggil fungsi yang sudah ada lalu `exit` — total skip menu interaktif.
+  - Semua prompt "Tekan Enter untuk kembali" diganti manggil 1 fungsi baru `pause()` yang otomatis skip kalau env var `TERMUXMOD_NONINTERACTIVE=1` di-set (dari Java). Prompt confirm `(y/n)` di import & prompt pilih-proyek di build juga di-guard sama env var yang sama.
+  - **Kalau dijalanin manual dari terminal tanpa argumen, perilakunya 100% sama kayak sebelumnya** — dispatcher cuma aktif kalau ada `$1`.
+  - Sisi Java (`ApkBuilderRunner`) diganti dari kirim stdin-keystroke jadi kirim argumen (`arguments = {script, action, project}`) + `additionalEnvironment` berisi `TERMUXMOD_NONINTERACTIVE=1` (parameter yang emang udah disediain `AppShell.execute()`, cuma sebelumnya saya isi `null`).
+- **Kenapa ini lebih baik dari sebelumnya**: Java sekarang gak perlu tau nomor menu (`1`/`2`/`5` dst) sama sekali — cuma manggil nama aksi. Kalau nanti kamu ubah urutan/tambah menu di script, otomasi ini nggak ikut rusak selama nama fungsi & action dispatcher-nya tetap sama.
+
+
 ## Yang PERLU kamu cek/lakukan sebelum build
 1. ~~Download bootstrap-aarch64.zip manual~~ — TIDAK PERLU, sudah auto lewat Gradle task `downloadBootstraps`.
 2. Sync Gradle / build via GitHub Actions.

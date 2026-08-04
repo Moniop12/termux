@@ -76,16 +76,18 @@
                     android:id="@+id/apk_builder_session_entry"
                     android:layout_width="match_parent"
                     android:layout_height="?android:attr/listPreferredItemHeight"
-                    android:background="@drawable/session_background_selected"
+                    android:background="@drawable/apk_builder_entry_background"
                     android:clickable="true"
                     android:focusable="true"
                     android:drawableStart="@drawable/ic_apk_builder"
                     android:drawablePadding="10dp"
-                    android:drawableTint="?attr/termuxActivityDrawerImageTint"
+                    android:drawableTint="#4CAF50"
                     android:gravity="start|center_vertical"
                     android:paddingStart="6dip"
                     android:paddingEnd="6dip"
                     android:text="@string/action_open_apk_builder"
+                    android:textColor="#FFFFFF"
+                    android:textStyle="bold"
                     android:textSize="14sp" />
 
                 <ListView
@@ -122,22 +124,6 @@
             </LinearLayout>
 
         </androidx.drawerlayout.widget.DrawerLayout>
-
-        <!-- TermuxMod: always-visible menu button, so opening the drawer doesn't
-             require a swipe-from-edge gesture (easy to miss/annoying on a phone). -->
-        <ImageButton
-            android:id="@+id/menu_button"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:layout_alignParentTop="true"
-            android:layout_alignParentStart="true"
-            android:layout_marginTop="10dp"
-            android:layout_marginStart="6dp"
-            android:elevation="8dp"
-            android:padding="8dp"
-            android:src="@drawable/ic_menu_termuxmod"
-            android:background="@drawable/bg_menu_button_circle"
-            android:contentDescription="@string/action_open_drawer_menu" />
 
         <androidx.viewpager.widget.ViewPager
             android:id="@+id/terminal_toolbar_view_pager"
