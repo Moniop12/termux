@@ -38,6 +38,38 @@ ok()    { echo -e "  ${GREEN}✅ $1${RESET}"; }
 warn()  { echo -e "  ${YELLOW}⚠️  $1${RESET}"; }
 err()   { echo -e "  ${RED}❌ $1${RESET}"; }
 
+# TermuxMod: ensures a command is available before it gets used, installing
+# its package if missing instead of letting the command fail silently later
+# (this is exactly what caused "rsync: command not found" mid-restore while
+# the script still claimed success). Retries a few times if `pkg`/`apt` is
+# locked by another process instead of giving up on the first try. Returns
+# 1 (and logs clearly) if the command still isn't available afterward, so
+# callers can accurately report a partial failure instead of a false
+# "selesai".
+require_pkg() {
+    local cmd="$1" pkg_name="${2:-$1}"
+    command -v "$cmd" >/dev/null 2>&1 && return 0
+
+    info "Paket '$pkg_name' belum terpasang, menginstall..."
+    local tries=0 installed=0
+    while [ $tries -lt 3 ]; do
+        if pkg install -y "$pkg_name" >/dev/null 2>&1; then
+            installed=1
+            break
+        fi
+        tries=$((tries + 1))
+        [ $tries -lt 3 ] && warn "Install '$pkg_name' gagal (percobaan $tries/3), coba lagi 3 detik..." && sleep 3
+    done
+
+    if command -v "$cmd" >/dev/null 2>&1; then
+        ok "Paket '$pkg_name' terpasang"
+        return 0
+    else
+        err "Gagal memasang '$pkg_name' setelah $((tries + 1))x percobaan — langkah yang butuh ini akan dilewati"
+        return 1
+    fi
+}
+
 # TermuxMod: replaces the various "Tekan [Enter] untuk kembali..." prompts.
 # Added so this script can be driven by the TermuxMod Android UI without a
 # visible terminal — when TERMUXMOD_NONINTERACTIVE=1 is set, this returns
@@ -227,7 +259,16 @@ download_platform_sdk() {
 
     warn "Fallback: Mengunduh dari Mirror AOSP..."
     mkdir -p "$platform_dir"
-    wget -q --show-progress -O "$platform_dir/android.jar" "https://github.com/Reginer/aosp-android-jar/raw/main/android-$api_level/android.jar"
+    if ! wget -q --show-progress -O "$platform_dir/android.jar" "https://github.com/Reginer/aosp-android-jar/raw/main/android-$api_level/android.jar"; then
+        err "Download mirror AOSP juga gagal untuk android-$api_level (cek koneksi / URL mungkin sudah mati)"
+        rm -rf "$platform_dir"
+        return 1
+    fi
+    if [ ! -s "$platform_dir/android.jar" ]; then
+        err "File android.jar hasil download kosong/rusak untuk android-$api_level"
+        rm -rf "$platform_dir"
+        return 1
+    fi
     wget -q -O "$platform_dir/framework.aidl" "https://raw.githubusercontent.com/Reginer/aosp-android-jar/main/android-$api_level/framework.aidl" 2>/dev/null || true
 
     if [ ! -s "$platform_dir/framework.aidl" ]; then
@@ -450,32 +491,66 @@ ensure_wrapper_template() {
 export_backup() {
     banner
     echo -e "  ${YELLOW}📦 Export Backup Fast (SDK + Cache + Paket Termux Offline)${RESET}\n"
-    pkg install p7zip zip rsync -y 2>/dev/null || true
+
+    local FAILED_STEPS=""
+    require_pkg rsync rsync || FAILED_STEPS="${FAILED_STEPS}rsync "
+    require_pkg zip zip || FAILED_STEPS="${FAILED_STEPS}zip "
+    require_pkg 7z p7zip || true  # not strictly required for export itself
+
     if [ ! -d "$SDK_DIR" ]; then err "Belum ada SDK. Jalankan Auto-Setup dulu."; sleep 2; return; fi
 
     STAGE="$HOME_DIR/.backup-temp"
     rm -rf "$STAGE"; mkdir -p "$STAGE/pkg-cache"
+
     step "1/4: Menyalin SDK Platforms & Build-Tools..."
-    rsync -a --exclude='ndk/' "$SDK_DIR/" "$STAGE/android-sdk/"
+    if command -v rsync >/dev/null 2>&1; then
+        if rsync -a --exclude='ndk/' "$SDK_DIR/" "$STAGE/android-sdk/"; then ok "SDK disalin"; else err "Gagal menyalin SDK"; FAILED_STEPS="${FAILED_STEPS}salin-sdk "; fi
+    else
+        err "rsync tidak tersedia — SDK TIDAK disalin ke backup"
+        FAILED_STEPS="${FAILED_STEPS}salin-sdk "
+    fi
+
     step "2/4: Menyalin Cache Gradle & Wrapper Template..."
-    [ -d "$HOME_DIR/.gradle" ] && rsync -a "$HOME_DIR/.gradle/" "$STAGE/.gradle/"
-    [ -d "$WRAPPER_DIR" ] && rsync -a "$WRAPPER_DIR/" "$STAGE/wrapper-template/"
+    if command -v rsync >/dev/null 2>&1; then
+        [ -d "$HOME_DIR/.gradle" ] && { rsync -a "$HOME_DIR/.gradle/" "$STAGE/.gradle/" || { err "Gagal menyalin cache Gradle"; FAILED_STEPS="${FAILED_STEPS}salin-gradle-cache "; }; }
+        [ -d "$WRAPPER_DIR" ] && { rsync -a "$WRAPPER_DIR/" "$STAGE/wrapper-template/" || { err "Gagal menyalin wrapper template"; FAILED_STEPS="${FAILED_STEPS}salin-wrapper "; }; }
+    fi
+
     step "3/4: Menyalin Installer Paket Termux (.deb)..."
-    [ -d "$SDK_DIR/pkg-cache" ] && cp "$SDK_DIR/pkg-cache/"*.deb "$STAGE/pkg-cache/" 2>/dev/null || true
-    [ -d "$PREFIX/var/cache/apt/archives" ] && cp "$PREFIX/var/cache/apt/archives/"*.deb "$STAGE/pkg-cache/" 2>/dev/null || true
+    [ -d "$SDK_DIR/pkg-cache" ] && cp "$SDK_DIR/pkg-cache/"*.deb "$STAGE/pkg-cache/" 2>/dev/null
+    [ -d "$PREFIX/var/cache/apt/archives" ] && cp "$PREFIX/var/cache/apt/archives/"*.deb "$STAGE/pkg-cache/" 2>/dev/null
+    true # cp above may find nothing to copy, which is fine, not an error
+
     step "4/4: Mengompresi Backup ke /sdcard/..."
     ZIPNAME="/sdcard/builder-backup-complete-$(date +%Y%m%d-%H%M).zip"
-    (cd "$STAGE" && zip -qr "$ZIPNAME" .)
-    SIZE=$(du -h "$ZIPNAME" 2>/dev/null | cut -f1)
-    rm -rf "$STAGE"
-    ok "Export Backup Selesai! ($SIZE)"
+    if (cd "$STAGE" && zip -qr "$ZIPNAME" .); then
+        SIZE=$(du -h "$ZIPNAME" 2>/dev/null | cut -f1)
+        rm -rf "$STAGE"
+        if [ -z "$FAILED_STEPS" ]; then
+            ok "Export Backup Selesai! ($SIZE)"
+        else
+            warn "Export Backup selesai TAPI ada bagian yang gagal: $FAILED_STEPS ($SIZE)"
+        fi
+    else
+        err "Gagal membuat file zip backup — cek ruang penyimpanan /sdcard"
+        rm -rf "$STAGE"
+    fi
     pause
 }
 
 import_backup() {
     banner
     echo -e "  ${YELLOW}📥 Import Backup Offline (Pindah HP / Restore)${RESET}\n"
-    pkg install p7zip unzip rsync -y 2>/dev/null || true
+
+    # TermuxMod: was `pkg install p7zip unzip rsync -y 2>/dev/null || true` —
+    # fully silent, so a failed install (e.g. from apt-get lock contention)
+    # went completely unnoticed until rsync failed later with "command not
+    # found" further down, after the banner already said "SELESAI".
+    local FAILED_STEPS=""
+    require_pkg unzip unzip || FAILED_STEPS="${FAILED_STEPS}unzip "
+    require_pkg 7z p7zip || FAILED_STEPS="${FAILED_STEPS}p7zip "
+    require_pkg rsync rsync || FAILED_STEPS="${FAILED_STEPS}rsync "
+
     BACKUP_FILE=$(ls -t /sdcard/builder-backup-complete-*.zip 2>/dev/null | head -n1)
     if [ -z "$BACKUP_FILE" ]; then err "Tidak ada file backup ditemukan!"; pause; return; fi
 
@@ -491,57 +566,132 @@ import_backup() {
     TEMP_RESTORE="$HOME_DIR/.restore-temp"
     rm -rf "$TEMP_RESTORE"; mkdir -p "$TEMP_RESTORE"
     step "1/4: Mengekstrak File Backup..."
-    unzip -o -q "$BACKUP_FILE" -d "$TEMP_RESTORE/"
+    if unzip -o -q "$BACKUP_FILE" -d "$TEMP_RESTORE/"; then
+        ok "File backup berhasil diekstrak"
+    else
+        err "Gagal mengekstrak file backup — restore dibatalkan"
+        rm -rf "$TEMP_RESTORE"
+        pause
+        return
+    fi
+
     step "2/4: Memasang Paket Termux (.deb) OFFLINE..."
-    if [ -d "$TEMP_RESTORE/pkg-cache" ] && [ -n "$(ls -A "$TEMP_RESTORE/pkg-cache/*.deb" 2>/dev/null)" ]; then
-        dpkg -i --force-depends "$TEMP_RESTORE/pkg-cache/"*.deb >/dev/null 2>&1 || true
+    if [ -d "$TEMP_RESTORE/pkg-cache" ] && [ -n "$(ls -A "$TEMP_RESTORE/pkg-cache/"*.deb 2>/dev/null)" ]; then
+        if dpkg -i --force-depends "$TEMP_RESTORE/pkg-cache/"*.deb >/dev/null 2>&1; then
+            ok "Paket Termux berhasil dipasang OFFLINE"
+        else
+            warn "Sebagian/semua paket .deb offline gagal dipasang (dilanjut, tidak fatal)"
+            FAILED_STEPS="${FAILED_STEPS}pasang-deb-offline "
+        fi
         mkdir -p "$SDK_DIR/pkg-cache"
         cp "$TEMP_RESTORE/pkg-cache/"*.deb "$SDK_DIR/pkg-cache/" 2>/dev/null || true
-        ok "Paket Termux berhasil dipasang OFFLINE"
+    else
+        info "Tidak ada cache paket .deb di backup ini, dilewati"
     fi
+
     step "3/4: Memulihkan SDK dan Cache Gradle..."
-    [ -d "$TEMP_RESTORE/android-sdk" ] && rsync -a "$TEMP_RESTORE/android-sdk/" "$SDK_DIR/"
-    [ -d "$TEMP_RESTORE/.gradle" ] && rsync -a "$TEMP_RESTORE/.gradle/" "$HOME_DIR/.gradle/"
-    [ -d "$TEMP_RESTORE/wrapper-template" ] && rsync -a "$TEMP_RESTORE/wrapper-template/" "$WRAPPER_DIR/"
+    if ! command -v rsync >/dev/null 2>&1; then
+        err "rsync tidak tersedia — SDK/cache Gradle TIDAK dipulihkan"
+        FAILED_STEPS="${FAILED_STEPS}restore-sdk restore-gradle-cache "
+    else
+        if [ -d "$TEMP_RESTORE/android-sdk" ]; then
+            if rsync -a "$TEMP_RESTORE/android-sdk/" "$SDK_DIR/"; then ok "SDK dipulihkan"; else err "Gagal memulihkan SDK"; FAILED_STEPS="${FAILED_STEPS}restore-sdk "; fi
+        fi
+        if [ -d "$TEMP_RESTORE/.gradle" ]; then
+            if rsync -a "$TEMP_RESTORE/.gradle/" "$HOME_DIR/.gradle/"; then ok "Cache Gradle dipulihkan"; else err "Gagal memulihkan cache Gradle"; FAILED_STEPS="${FAILED_STEPS}restore-gradle-cache "; fi
+        fi
+        if [ -d "$TEMP_RESTORE/wrapper-template" ]; then
+            if rsync -a "$TEMP_RESTORE/wrapper-template/" "$WRAPPER_DIR/"; then ok "Wrapper template dipulihkan"; else err "Gagal memulihkan wrapper template"; FAILED_STEPS="${FAILED_STEPS}restore-wrapper "; fi
+        fi
+    fi
+
     step "4/4: Deteksi & Ekstrak NDK..."
     mkdir -p "$SDK_DIR/ndk"
     local ndk_archive=$(find "$TEMP_RESTORE" "$SDK_DIR/ndk" /sdcard -maxdepth 2 \( -iname "android-ndk-*.7z" -o -iname "android-ndk-*.zip" \) 2>/dev/null | head -n1)
     if [ -n "$ndk_archive" ] && [ -f "$ndk_archive" ]; then
         mkdir -p "$SDK_DIR/ndk/tmp_ndk"
-        if [[ "$ndk_archive" == *.7z ]]; then 7z x -o"$SDK_DIR/ndk/tmp_ndk" "$ndk_archive" -y >/dev/null 2>&1
-        else unzip -q "$ndk_archive" -d "$SDK_DIR/ndk/tmp_ndk"; fi
-        local extracted_ndk_dir=$(find "$SDK_DIR/ndk/tmp_ndk" -maxdepth 2 -name "ndk-build" -exec dirname {} \; 2>/dev/null | head -n1)
-        if [ -n "$extracted_ndk_dir" ]; then
-            rm -rf "$NDK_DIR" 2>/dev/null
-            mv "$extracted_ndk_dir" "$NDK_DIR"
-            rm -rf "$SDK_DIR/ndk/tmp_ndk"
-            ok "NDK Manual terpasang di $NDK_DIR"
+        local extract_ok=1
+        if [[ "$ndk_archive" == *.7z ]]; then 7z x -o"$SDK_DIR/ndk/tmp_ndk" "$ndk_archive" -y >/dev/null 2>&1 || extract_ok=0
+        else unzip -q "$ndk_archive" -d "$SDK_DIR/ndk/tmp_ndk" || extract_ok=0; fi
+        if [ "$extract_ok" = "0" ]; then
+            err "Gagal mengekstrak arsip NDK ($ndk_archive)"
+            FAILED_STEPS="${FAILED_STEPS}extract-ndk "
+        else
+            local extracted_ndk_dir=$(find "$SDK_DIR/ndk/tmp_ndk" -maxdepth 2 -name "ndk-build" -exec dirname {} \; 2>/dev/null | head -n1)
+            if [ -n "$extracted_ndk_dir" ]; then
+                rm -rf "$NDK_DIR" 2>/dev/null
+                mv "$extracted_ndk_dir" "$NDK_DIR"
+                rm -rf "$SDK_DIR/ndk/tmp_ndk"
+                ok "NDK Manual terpasang di $NDK_DIR"
+            else
+                warn "Arsip NDK diekstrak tapi 'ndk-build' tidak ditemukan di dalamnya"
+                FAILED_STEPS="${FAILED_STEPS}ndk-tidak-valid "
+            fi
         fi
+    else
+        info "Tidak ada arsip NDK ditemukan di backup ini, dilewati"
     fi
+
     rm -rf "$TEMP_RESTORE"
     fix_ndk_permissions
     ensure_wrapper_template
-    echo -e "\n${GREEN}${BOLD}  🎉 RESTORE SELESAI!${RESET}"
+
+    # TermuxMod: was always "🎉 RESTORE SELESAI!" regardless of what actually
+    # happened above — now only says that if nothing failed.
+    if [ -z "$FAILED_STEPS" ]; then
+        echo -e "\n${GREEN}${BOLD}  🎉 RESTORE SELESAI!${RESET}"
+    else
+        echo -e "\n${YELLOW}${BOLD}  ⚠️  RESTORE SELESAI DENGAN MASALAH${RESET}"
+        echo -e "  ${YELLOW}Bagian yang gagal/dilewati: ${FAILED_STEPS}${RESET}"
+    fi
     sleep 2
 }
 
 auto_setup() {
     banner
     echo -e "  ${YELLOW}Pemeriksaan Lingkungan Pembangun (Auto-Setup)${RESET}\n"
+    local FAILED_STEPS=""
+
     step "1/5: Verifikasi Akses Storage & Paket Termux"
     if [ ! -d "$HOME_DIR/storage" ] || [ ! -w "/sdcard" ]; then yes | termux-setup-storage 2>/dev/null || true; sleep 1; fi
     mkdir -p "$SDK_DIR/pkg-cache"
-    apt-get update -y 2>/dev/null || true
-    apt-get install -y -o Dir::Cache::archives="$SDK_DIR/pkg-cache" openjdk-17 python gradle android-tools rsync aapt aapt2 apksigner d8 aidl cmake ninja make wget curl git zip unzip perl p7zip clang 2>/dev/null || true
-    ok "Paket Termux Siap"
+    if ! apt-get update -y 2>&1 | tail -n 3; then
+        warn "apt-get update gagal/ada peringatan (dilanjut, mungkin sudah cukup up-to-date)"
+    fi
+    apt-get install -y -o Dir::Cache::archives="$SDK_DIR/pkg-cache" openjdk-17 python gradle android-tools rsync aapt aapt2 apksigner d8 aidl cmake ninja make wget curl git zip unzip perl p7zip clang 2>&1 | tail -n 5
+
+    # TermuxMod: the install above used to be fully silenced (`2>/dev/null ||
+    # true`) so a failure (e.g. from a dead mirror or apt lock contention)
+    # went completely unnoticed until something later broke in a confusing
+    # way. Verify the binaries that actually matter are really there.
+    local critical_missing=""
+    for bin in javac gradle rsync aapt2 aidl d8; do
+        command -v "$bin" >/dev/null 2>&1 || critical_missing="${critical_missing}${bin} "
+    done
+    if [ -n "$critical_missing" ]; then
+        err "Paket berikut GAGAL terpasang: $critical_missing"
+        warn "Mencoba install ulang satu-satu..."
+        for bin in $critical_missing; do
+            local pkg_for_bin="$bin"
+            [ "$bin" = "javac" ] && pkg_for_bin="openjdk-17"
+            [ "$bin" = "aapt2" ] && pkg_for_bin="aapt2"
+            [ "$bin" = "d8" ] && pkg_for_bin="d8"
+            require_pkg "$bin" "$pkg_for_bin" || FAILED_STEPS="${FAILED_STEPS}paket:${bin} "
+        done
+    else
+        ok "Paket Termux Siap (semua binary kritis terverifikasi ada)"
+    fi
+
     step "2/5: Struktur SDK, Dummy Build-Tools & CMake SDK"
     mkdir -p "$SDK_DIR/platforms" "$SDK_DIR/build-tools" "$SDK_DIR/licenses" "$SDK_DIR/cmake"
     setup_dummy_build_tools "33.0.1"
     setup_dummy_build_tools "34.0.0"
     setup_dummy_cmake "3.22.1"
     setup_dummy_cmake "3.18.1"
+
     step "3/5: Platform SDK Default"
-    download_platform_sdk 34
+    download_platform_sdk 34 || { err "Download Platform SDK 34 gagal"; FAILED_STEPS="${FAILED_STEPS}platform-sdk "; }
+
     step "4/5: Konfigurasi Gradle Properties Override"
     echo "24333f8a637bced5e17096433f01641e5f692d6e" > "$SDK_DIR/licenses/android-sdk-license"
     mkdir -p ~/.gradle
@@ -562,23 +712,39 @@ kotlin.incremental=false
 android.builder.sdkDownload=false
 EOF
     ok "Gradle Properties dikonfigurasi"
+
     step "5/5: NDK Setup & Permissions"
     if [ ! -d "$NDK_DIR" ]; then
         local NDK_URL="https://github.com/Lzhiyong/termux-ndk/releases/download/android-ndk/android-ndk-r25c-aarch64.zip"
-        wget -q --show-progress -O "$SDK_DIR/ndk.zip" "$NDK_URL" || true
-        if [ -f "$SDK_DIR/ndk.zip" ]; then
+        info "Mengunduh NDK dari: $NDK_URL"
+        if wget -q --show-progress -O "$SDK_DIR/ndk.zip" "$NDK_URL"; then
             mkdir -p "$SDK_DIR/ndk/tmp"
-            unzip -q "$SDK_DIR/ndk.zip" -d "$SDK_DIR/ndk/tmp"
-            EXTRACTED_NDK=$(ls "$SDK_DIR/ndk/tmp" | head -n1)
-            mkdir -p "$SDK_DIR/ndk/"
-            mv "$SDK_DIR/ndk/tmp/$EXTRACTED_NDK" "$NDK_DIR"
-            rm -rf "$SDK_DIR/ndk/tmp" "$SDK_DIR/ndk.zip"
-            ok "NDK terpasang di $NDK_DIR"
+            if unzip -q "$SDK_DIR/ndk.zip" -d "$SDK_DIR/ndk/tmp"; then
+                EXTRACTED_NDK=$(ls "$SDK_DIR/ndk/tmp" | head -n1)
+                mkdir -p "$SDK_DIR/ndk/"
+                mv "$SDK_DIR/ndk/tmp/$EXTRACTED_NDK" "$NDK_DIR"
+                rm -rf "$SDK_DIR/ndk/tmp" "$SDK_DIR/ndk.zip"
+                ok "NDK terpasang di $NDK_DIR"
+            else
+                err "Gagal mengekstrak NDK yang sudah diunduh — file zip mungkin korup"
+                FAILED_STEPS="${FAILED_STEPS}ekstrak-ndk "
+            fi
+        else
+            err "Gagal download NDK dari $NDK_URL (URL mati / tidak ada koneksi?)"
+            FAILED_STEPS="${FAILED_STEPS}download-ndk "
         fi
-    else ok "NDK sudah tersedia (Cached)"; fi
+    else
+        ok "NDK sudah tersedia (Cached)"
+    fi
     fix_ndk_permissions
     ensure_wrapper_template
-    echo -e "\n${GREEN}${BOLD}  🎉 Auto-Setup Selesai!${RESET}"
+
+    if [ -z "$FAILED_STEPS" ]; then
+        echo -e "\n${GREEN}${BOLD}  🎉 Auto-Setup Selesai!${RESET}"
+    else
+        echo -e "\n${YELLOW}${BOLD}  ⚠️  Auto-Setup Selesai DENGAN MASALAH${RESET}"
+        echo -e "  ${YELLOW}Bagian yang gagal: ${FAILED_STEPS}${RESET}"
+    fi
     sleep 2
 }
 

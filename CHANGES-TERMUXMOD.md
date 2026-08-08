@@ -83,6 +83,18 @@ Respons ke: blok putih, floating button ganggu, log ANSI kacau, ANR pas nunggu b
 - **Kenapa ini lebih baik dari sebelumnya**: Java sekarang gak perlu tau nomor menu (`1`/`2`/`5` dst) sama sekali — cuma manggil nama aksi. Kalau nanti kamu ubah urutan/tambah menu di script, otomasi ini nggak ikut rusak selama nama fungsi & action dispatcher-nya tetap sama.
 
 
+## 9. build.sh — perbaikan robustness & kejujuran status (bukan ubah alur/fitur)
+Respons ke laporan: restore bilang "SELESAI" padahal `rsync: command not found` 3x (SDK gak beneran ke-restore).
+
+- **`require_pkg()`** (baru): cek command ada, kalau belum → install via `pkg`, retry sampai 3x kalau kena lock apt (bukan langsung nyerah), lapor jelas kalau akhirnya tetap gagal — dipanggil di `import_backup()`, `export_backup()`, `auto_setup()`.
+- **`import_backup()`**: tiap `rsync`/`unzip`/`dpkg`/ekstraksi NDK sekarang dicek exit code-nya. Banner akhir jadi jujur: `🎉 RESTORE SELESAI!` cuma muncul kalau BENERAN semua sukses; kalau ada yang gagal → `⚠️ RESTORE SELESAI DENGAN MASALAH` + daftar bagian yang gagal.
+- **`export_backup()`**: pola sama — tiap `rsync`/`zip` dicek, banner jujur.
+- **`auto_setup()`**: setelah install paket besar-besaran, sekarang **verifikasi 6 binary kritis** (`javac`,`gradle`,`rsync`,`aapt2`,`aidl`,`d8`) beneran ada — kalau ada yang kurang, dicoba install ulang satu-satu (`require_pkg`) baru dilaporkan kalau tetap gagal. Download NDK juga dicek exit code `wget`-nya (sebelumnya `|| true`, gagal diem-diem).
+- **`download_platform_sdk()`**: jalur fallback mirror-nya dulu SELALU return sukses walau `wget`-nya gagal (gak dicek sama sekali) — sekarang dicek exit code + ukuran file hasil download, `return 1` kalau beneran gagal (dan `auto_setup()` sekarang beneran nangkep kegagalan ini di banner akhirnya, karena sebelumnya percuma soalnya function-nya emang selalu "sukses").
+- **`build_project()` (proses build APK)**: dicek, ternyata **udah oke dari awal** — exit code gradle sudah ditangkap, ada banner SUKSES/GAGAL + root-cause grep dari log. Gak ada yang saya ubah di situ.
+- Semua perubahan ini **nambah pengecekan, gak ngubah alur/fitur yang ada** — kalau semua sukses (kasus normal), tampilannya sama persis kayak sebelumnya, cuma sekarang beneran jujur kalau ada yang gagal di tengah jalan.
+
+
 ## Yang PERLU kamu cek/lakukan sebelum build
 1. ~~Download bootstrap-aarch64.zip manual~~ — TIDAK PERLU, sudah auto lewat Gradle task `downloadBootstraps`.
 2. Sync Gradle / build via GitHub Actions.
